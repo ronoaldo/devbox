@@ -8,13 +8,13 @@ Quick start:
 * Install the Google Cloud SDK (https://cloud.google.com/sdk)
 * Run the following command:
 
-	gcloud compute instances create \
-		--metadata-from-file startup-script=startup.sh \
-		--metadata codebox-password=<your password here> \
-		--tags http-server \
-		--image beta-debian-8-jessie-v20150710 \
-		--image-project debian-cloud \
-		<your box name here>
+    gcloud compute instances create \
+        --metadata-from-file startup-script=startup.sh \
+        --metadata codebox-password=<your password here> \
+        --tags http-server \
+        --image beta-debian-8-jessie-v20150710 \
+        --image-project debian-cloud \
+        <your box name here>
 
 Replacing:
 
