@@ -1,13 +1,13 @@
 #!/bin/bash
 
 # Copyright 2015 Ronoaldo JLP
-# 
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
 #     http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -26,11 +26,11 @@ fi
 # Quiet installation for debian packages
 export DEBIAN_FRONTEND=noninteractive
 
-# Update package lists and upgrade program details
-apt-get update && apt-get upgrade --yes
+# Update package lists and upgrade installed programs
+apt-get -qq update && apt-get -qq upgrade --yes
 
-# Install packages in the VM
-apt-get install --yes \
+# Install/upgrade packages in the VM
+apt-get install -qq --yes \
 	tmux vim emacs exuberant-ctags command-not-found \
 	subversion mercurial git \
 	build-essential devscripts \
@@ -44,16 +44,24 @@ apt-get install --yes \
 	mysql-client sqlite3 \
 	nginx
 
-# Detect password from metadata server, if available
-_PASSWORD_METADATA="http://metadata.google.internal/computeMetadata/v1/instance/attributes/codebox-password"
-if curl -q $_PASSWORD_METADATA > /dev/null ; then
-	export PASSWORD=$(curl $_PASSWORD_METADATA -H 'Metadata-Flavor: Google')
-else
-	export PASSWORD="123456"
-fi
+# Helper function to fetch instance custom metadata
+# Usage:
+#   metadata key default-value
+metadata() {
+  _url="http://metadata.google.internal/computeMetadata/v1/instance/$1"
+	# Return the value found, or the default value if the metadata value does not exists
+	if curl --fail -s ${_url} -H 'Metadata-Flavor: Google' > /dev/null ; then
+		curl --fail -s ${_url} -H 'Metadata-Flavor: Google'
+	else
+		echo $2
+	fi
+}
 
+# Detect password from metadata server, if available
+export PASSWORD="$(dd if=/dev/urandom bs=12 count=1 status=none | base64)"
+export PASSWORD="$(metadata 'attributes/codebox-password' "$PASSWORD")"
 # Default port to launch the IDE
-export PORT=2000
+export PORT="$(metadata 'attributes/codebox-port' '2000')"
 
 # TODO(ronoaldo): use Debian repository maven.
 # Maven 3.1+ made significant changes
@@ -63,17 +71,16 @@ export PORT=2000
 if [ ! -f /usr/local/bin/mvn ] ; then
 	MAVEN_BIN="http://ftp.unicamp.br/pub/apache/maven/maven-3/3.3.3/binaries/apache-maven-3.3.3-bin.tar.gz"
 	mkdir -p /opt/maven
-	curl $MAVEN_BIN | tar xzf - -C /opt/maven
+	curl -s $MAVEN_BIN | tar xzf - -C /opt/maven
 	ln -s /opt/maven/apache-maven-3.3.3/bin/mvnDebug /usr/local/bin/mvnDebug
 	ln -s /opt/maven/apache-maven-3.3.3/bin/mvn /usr/local/bin/mvn
 fi
 
 # Setup the developer account
 if ! getent passwd developer ; then
-	adduser --gecos "" --disabled-password developer
+	adduser --gecos "Developer,,," --disabled-password developer
 	addgroup developer docker
 fi
-
 
 # Install Codebox IDE from NPM and configure as a service
 # TODO(ronoaldo): use a packaged version of codebox
@@ -81,7 +88,8 @@ if [ ! -f /usr/local/bin/codebox ] ; then
 	export HOME=/home/developer
 	cd $HOME
 	npm -g install codebox
-	# TODO(ronoaldo): fix on the source tree/vendored dependency?
+	# TODO(ronoaldo): fix on the source tree/vendored dependency
+	# See: http://stackoverflow.com/questions/23570023/issues-in-finding-node-package-when-running-codebox
 	cd /usr/local/lib/node_modules/codebox/node_modules/shux/node_modules/pty.js
 	make clean
 	make
@@ -130,7 +138,7 @@ EOF
 chmod +x /etc/init.d/codeboxd
 update-rc.d codeboxd defaults
 
-# Expose on port 80
+# Expose on port 80 using Nginx reverse proxy
 cat > /etc/nginx/conf.d/codebox.conf <<EOF
 map \$http_upgrade \$connection_upgrade {
 	default upgrade;
@@ -158,8 +166,28 @@ server {
 	}
 }
 EOF
-rm -vf /etc/nginx/sites-enabled/default
+rm -vf /etc/nginx/sites-enabled/default # Disable default site
 
 # Restart the services after a sucessfull boot
-service codeboxd start
-service nginx reload
+service codeboxd restart
+service nginx restart
+
+# Show user instructions on serial console
+cat <<EOF
+******************************************************
+
+Your Google Cloud IDE is ready!
+
+Codebox was installed and launched on port $PORT,
+and proxied on port 80 using Nginx.
+
+You can login with:
+
+* Username: developer
+* Password: $PASSWORD
+* URL: http://$(metadata 'network-interfaces/0/access-configs/0/external-ip')/
+
+Happy hacking!
+
+******************************************************
+EOF
