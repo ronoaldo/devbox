@@ -43,6 +43,9 @@ apt-get install -qq --yes \
 	docker.io \
 	mysql-client sqlite3 \
 	nginx
+# Post-install setup
+update-command-not-found
+
 
 # Helper function to fetch instance custom metadata
 # Usage:
@@ -63,6 +66,24 @@ export PASSWORD="$(metadata 'attributes/codebox-password' "$PASSWORD")"
 # Default port to launch the IDE
 export PORT="$(metadata 'attributes/codebox-port' '2000')"
 
+# Setup data disk as home partition
+DATA_DISK=$(metadata 'attributes/codebox-datadisk' '')
+case $DATA_DISK in
+	"")
+		echo "No data disk specified. Skipping ..."
+	;;
+	*)
+		echo "Mounting $DATA_DISK as /home/ ..."
+		DISK_DEVICE="/dev/disk/by-id/google-$DATA_DISK"
+		MOUNT_POINT="/home/"
+		if [ -e $DISK_DEVICE ] ; then
+			/usr/share/google/safe_format_and_mount -m "mkfs.ext4 -F" $DISK_DEVICE $MOUNT_POINT
+		else
+			echo "The specified disk name is not attached to the instance!"
+		fi
+	;;
+esac
+
 # TODO(ronoaldo): use Debian repository maven.
 # Maven 3.1+ made significant changes
 # and it is not included as part of the current Debian stable release, however
@@ -81,6 +102,9 @@ if ! getent passwd developer ; then
 	adduser --gecos "Developer,,," --disabled-password developer
 	addgroup developer docker
 fi
+
+# Make shure all files are owned by the developer account under /home
+chown -R developer:developer /home/developer
 
 # Install Codebox IDE from NPM and configure as a service
 # TODO(ronoaldo): use a packaged version of codebox
