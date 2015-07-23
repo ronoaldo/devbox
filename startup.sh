@@ -56,7 +56,7 @@ metadata() {
 	if curl --fail -s ${_url} -H 'Metadata-Flavor: Google' > /dev/null ; then
 		curl --fail -s ${_url} -H 'Metadata-Flavor: Google'
 	else
-		echo $2
+		echo -n "$2"
 	fi
 }
 
@@ -200,7 +200,7 @@ service nginx restart
 cat <<EOF
 ******************************************************
 
-Your Google Cloud IDE is ready!
+Your cloud IDE is ready!
 
 Codebox was installed and launched on port $PORT,
 and proxied on port 80 using Nginx.
