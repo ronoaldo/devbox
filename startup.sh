@@ -31,7 +31,7 @@ apt-get -qq update && apt-get -qq upgrade --yes
 
 # Install/upgrade packages in the VM
 apt-get install -qq --yes \
-	tmux vim emacs exuberant-ctags command-not-found \
+	tmux vim nano emacs exuberant-ctags command-not-found bash-completion \
 	subversion mercurial git \
 	build-essential devscripts \
 	curl wget \
@@ -39,13 +39,16 @@ apt-get install -qq --yes \
 	openjdk-7-jdk openjdk-8-jdk ant \
 	python-dev python3-dev \
 	golang golang-go.tools \
-	ruby ruby-dev \
+	ruby ruby-dev ruby-compass \
 	docker.io \
 	mysql-client sqlite3 \
 	nginx
+
+# Install some basic tools
+npm -g install grunt-cli gulp-cli bower less
+
 # Post-install setup
 update-command-not-found
-
 
 # Helper function to fetch instance custom metadata
 # Usage:
