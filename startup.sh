@@ -148,7 +148,7 @@ DAEMON=/usr/local/bin/codebox
 do_start() {
 	# Start as a daemon for the developer user
 	start-stop-daemon --start --chuid developer --chdir /home/developer --background --verbose \
-		-x \$DAEMON -- run . --port ${PORT} --users 'developer:${PASSWORD}' --hostname localhost
+		-x \$DAEMON -- run . --port ${PORT} --users 'developer:${PASSWORD}' --hostname 0.0.0.0
 }
 
 do_stop() {
@@ -173,16 +173,23 @@ map \$http_upgrade \$connection_upgrade {
 }
 
 upstream websocket {
-	server localhost:${PORT};
+	server 127.0.0.1:${PORT};
 }
 
 server {
 	listen 80;
+
 	location / {
 		proxy_set_header Host \$host;
 		proxy_set_header X-Real-IP \$remote_addr;
 		proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-		proxy_pass http://localhost:${PORT};
+
+		set \$proxyport ${PORT};
+		if (\$host ~* ([2-9][0-9][0-9][0-9])\..*) {
+			set \$proxyport \$1;
+		}
+
+		proxy_pass http://127.0.0.1:\$proxyport;
 	}
 
 	location /socket.io {
