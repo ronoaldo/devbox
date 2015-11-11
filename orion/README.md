@@ -1,7 +1,7 @@
 # Development Box on Google Cloud
 
 Quick setup an Open Source Cloud IDE on Google Cloud Platform
-with Debian Jessie and Codebox!
+with Debian Jessie and Eclipse Orion!
 
 ## Quick start
 
@@ -12,7 +12,7 @@ with Debian Jessie and Codebox!
     gcloud compute instances create \
         --no-boot-disk-auto-delete \
         --metadata-from-file startup-script=startup.sh \
-        --metadata codebox-password=PASSWORD \
+        --metadata orion-password=PASSWORD \
         --tags http-server,devbox \
         --image debian-8 \
         --zone ZONE \
@@ -34,7 +34,7 @@ is ready using the command:
 ```
 
 If all commands were executed you should see a message saying that the box is ready.
-If you forgot to specify a password with the metadata key _codebox-password_
+If you forgot to specify a password with the metadata key _orion-password_
 a random password is generated for you, and is available at the console output.
 
 ## Tips and Tricks
@@ -43,7 +43,7 @@ a random password is generated for you, and is available at the console output.
 
 It is desirable to have a separated data disk attached to your
 box to keep your files safe. The startup script is prepared
-to recognize a metadata entry with key _codebox-datadisk_,
+to recognize a metadata entry with key _orion-datadisk_,
 containing the name of a Persistent Disk attached to your
 instance. When this entry is detected, and the disk
 is attached to the instance during boot, the script will
@@ -76,7 +76,7 @@ the following command to use the disk to store your data:
     gcloud compute instances create \
         --disk name=DISK_NAME,device-name=DISK_NAME \
         --metadata-from-file startup-script=startup.sh \
-        --metadata codebox-password=PASSWORD,codebox-datadisk=DISK_NAME \
+        --metadata orion-password=PASSWORD,orion-datadisk=DISK_NAME \
         --tags http-server,devbox \
         --image debian-8 \
         --zone ZONE \
@@ -84,7 +84,7 @@ the following command to use the disk to store your data:
 ```
 
 This is essentially the same command as before, but with the parameters
-`--disks name=DISK_NAME device-name=DISK_NAME` and `--metadata codebox-datadisk=DISK_NAME`
+`--disks name=DISK_NAME device-name=DISK_NAME` and `--metadata orion-datadisk=DISK_NAME`
 added to the gcloud options.
 
 ### Manage costs
@@ -111,9 +111,10 @@ advantage of that.
 ### Security
 
 Choose a strong password and keep an eye on the security updates
-from Debian and Codebox. Codebox is a Node app and currently
-is not package as part of Debian, so it is important to keep
-an eye on their updates.
+from Debian and Eclipse Orion.
+
+Orion is not package as part of Debian, so it is important to keep
+an eye on their updates at their website: http://orion.eclipse.org/downloads/
 
 Also, you can change the startup script nginx template to use
 an SSL certificate to encrypt your connection, either by purchasing
