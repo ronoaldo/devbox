@@ -152,7 +152,7 @@ do_start() {
 }
 
 do_stop() {
-	ps fax | awk '/orion/ {print $1}' | xargs kill -9
+	ps fax | awk '/node/ {print $1}' | xargs kill -9
 }
 
 case \$1 in

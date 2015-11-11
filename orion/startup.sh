@@ -117,16 +117,18 @@ plugins/org.eclipse.equinox.launcher.gtk.linux.x86_64_1.1.200.v20140603-1326
 -consoleLog
 -console
 -data
-/home/developer
+/home/developer/orion
 -nosplash
 -vmargs
 -Dorg.eclipse.equinox.http.jetty.http.port=$PORT
 -Dorg.eclipse.equinox.http.jetty.autostart=false
 -Dhelp.lucene.tokenizer=standard
--Dorion.file.allowedPaths /home/developer
--Dorion.auth.admin.default.password "$PASSWORD" \
 -Xms40m
 -Xmx384m
+EOF
+	cat > /opt/orion/eclipse/orion.conf <<EOF
+orion.file.allowedPaths=/home/developer
+orion.auth.admin.default.password=$PASSWORD \
 EOF
 	ln -s /opt/orion/eclipse/orion /usr/local/bin/orion
 fi
@@ -166,10 +168,12 @@ do_start() {
 	# Start as a daemon for the developer user
 	start-stop-daemon --start --chuid developer --chdir /home/developer --background --verbose -x \$DAEMON
 }
+
 do_stop() {
 	# We should have only one running anyway
-	killall -9 orion
+	ps fax | awk '/orion/ {print $1}' | xargs kill -9
 }
+
 case \$1 in
 	start)   do_start ;;
 	stop)    do_stop ;;
