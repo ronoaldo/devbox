@@ -152,8 +152,7 @@ do_start() {
 }
 
 do_stop() {
-	# We should have only one running anyway
-	killall -9 node
+	ps fax | awk '/orion/ {print $1}' | xargs kill -9
 }
 
 case \$1 in
