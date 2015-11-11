@@ -109,18 +109,26 @@ if [ ! -d /opt/orion ] ; then
 	mkdir -p /opt/orion
 	curl -s "$ORION_BIN" > $ORION_TMP
 	unzip -q -n $ORION_TMP -d /opt/orion/
-	cat > /opt/orion/eclipse/orion-wrapper <<EOF
-#!/bin/bash
-basedir="\$(readlink -f $0)"
-basedir="\$(dirname "$basedir")"
-exec \${basedir}/orion \
-        -data \$HOME/orion \
-        -Dorion.file.allowedPaths \$HOME/ \
-        -Dorion.auth.admin.default.password "$PASSWORD" \
-        -Dorg.eclipse.equinox.http.jetty.http.port=8080
+	cat > /opt/orion/eclipse/orion.ini <<EOF
+-startup
+plugins/org.eclipse.equinox.launcher_1.3.0.v20140415-2008.jar
+--launcher.library
+plugins/org.eclipse.equinox.launcher.gtk.linux.x86_64_1.1.200.v20140603-1326
+-consoleLog
+-console
+-data
+/home/developer
+-nosplash
+-vmargs
+-Dorg.eclipse.equinox.http.jetty.http.port=$PORT
+-Dorg.eclipse.equinox.http.jetty.autostart=false
+-Dhelp.lucene.tokenizer=standard
+-Dorion.file.allowedPaths /home/developer
+-Dorion.auth.admin.default.password "$PASSWORD" \
+-Xms40m
+-Xmx384m
 EOF
-	chmod +x /opt/orion/eclipse/orion-wrapper
-	ln -s /opt/orion/eclipse/orion-wrapper /usr/local/bin/orion
+	ln -s /opt/orion/eclipse/orion /usr/local/bin/orion
 fi
 
 # Setup the developer account
@@ -150,12 +158,13 @@ cat > /etc/init.d/oriond <<EOF
 #                    override the defaults in /lib/init/init-d-script.
 # Author: Ronoaldo JLP <ronoaldo@gmail.com>
 ### END INIT INFO
-DESC="Codebox Development Environment"
+
+DESC="Development Environment"
 DAEMON=/usr/local/bin/orion
+
 do_start() {
 	# Start as a daemon for the developer user
-	start-stop-daemon --start --chuid developer --chdir /home/developer --background --verbose \
-		-x \$DAEMON
+	start-stop-daemon --start --chuid developer --chdir /home/developer --background --verbose -x \$DAEMON
 }
 do_stop() {
 	# We should have only one running anyway
