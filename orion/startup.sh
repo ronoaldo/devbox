@@ -23,40 +23,6 @@ if [ x"$DEBUG" == x"true" ] ; then
 	set -x
 fi
 
-# Quiet installation for debian packages
-export DEBIAN_FRONTEND=noninteractive
-
-# Setup testing, with negative pinning
-echo     'deb http://httpredir.debian.org/debian testing main' >> /etc/apt/sources.list.d/testing.list
-echo -e 'Package: *\nPin: release a=testing\nPin-Priority: -1' >> /etc/apt/preferences.d/testing
-
-# Update package lists and upgrade installed programs
-apt-get -qq update && apt-get -qq upgrade --yes
-
-# Install/upgrade packages in the VM
-apt-get install -qq --yes \
-	tmux vim nano emacs exuberant-ctags command-not-found bash-completion \
-	subversion mercurial git \
-	build-essential devscripts \
-	curl wget \
-	npm npm2deb nodejs nodejs-legacy \
-	openjdk-7-jdk openjdk-8-jdk ant \
-	python-dev python3-dev \
-	ruby ruby-dev ruby-compass \
-	docker.io \
-	mysql-client sqlite3 \
-	nginx
-
-# Cherry pick some packages from testing
-apt-get install -ttesting -qq --yes \
-	golang-go golang-golang-x-tools maven
-
-# Install some basic tools
-npm -g install grunt-cli gulp-cli bower less
-
-# Post-install setup
-update-command-not-found
-
 # Helper function to fetch instance custom metadata
 # Usage:
 #   metadata key default-value
@@ -70,12 +36,50 @@ metadata() {
 	fi
 }
 
+# Quiet installation for debian packages
+export DEBIAN_FRONTEND=noninteractive
+
+# Setup testing, with negative pinning
+if [ ! -f /etc/apt/sources.list.d/testing.list ] ; then
+	echo "Installing base software ... "
+	echo     'deb http://httpredir.debian.org/debian testing main' >> /etc/apt/sources.list.d/testing.list
+	echo -e 'Package: *\nPin: release a=testing\nPin-Priority: -1' >> /etc/apt/preferences.d/testing
+
+	# Update package lists and upgrade installed programs
+	apt-get -qq update && apt-get -qq upgrade --yes
+	
+	# Install/upgrade packages in the VM
+	apt-get install -qq --yes \
+		tmux vim nano emacs exuberant-ctags command-not-found bash-completion \
+		subversion mercurial git \
+		build-essential devscripts \
+		curl wget \
+		npm npm2deb nodejs nodejs-legacy \
+		openjdk-7-jdk openjdk-8-jdk ant \
+		python-dev python3-dev \
+		ruby ruby-dev ruby-compass \
+		docker.io \
+		mysql-client sqlite3 \
+		nginx
+	
+	# Cherry pick some packages from testing
+	apt-get install -ttesting -qq --yes \
+		golang-go golang-golang-x-tools maven
+	
+	# Install some basic tools
+	npm -g install grunt-cli gulp-cli bower less
+	
+	# Post-install setup
+	update-command-not-found
+fi
+
 # Detect password from metadata server, if available
 export USER="$(metadata 'attributes/orion-unixuser' 'developer')"
 export PASSWORD="$(dd if=/dev/urandom bs=12 count=1 status=none | base64)"
 export PASSWORD="$(metadata 'attributes/orion-password' "$PASSWORD")"
-# Default port to launch the IDE
 export PORT="$(metadata 'attributes/orion-port' '2000')"
+export GOTTY_SALT="$(dd if=/dev/urandom bs=22 count=1 status=none | base64 | tr -d '/')"
+export GOTTY_SALT="$(metadata 'attributes/orion-ttysalt' "GOTTY_SALT")"
 
 # Setup data disk as home partition
 DATA_DISK=$(metadata 'attributes/orion-datadisk' '')
@@ -95,7 +99,7 @@ case $DATA_DISK in
 	;;
 esac
 
-# Setup Orion
+# Install Orion
 if [ ! -d /opt/orion ] ; then
 	echo "Installing orion ..."
 	ORION_BIN="http://download.eclipse.org/orion/drops/R-10.0-201510301610/eclipse-orion-10.0-linux.gtk.x86_64.zip"
@@ -105,6 +109,8 @@ if [ ! -d /opt/orion ] ; then
 	unzip -q -n $ORION_TMP -d /opt/orion/
 	ln -s /opt/orion/eclipse/orion /usr/local/bin/orion
 fi
+
+# Setup default Orion configuration
 cat > /opt/orion/eclipse/orion.ini <<EOF
 -startup
 plugins/org.eclipse.equinox.launcher_1.3.0.v20140415-2008.jar
@@ -122,12 +128,13 @@ plugins/org.eclipse.equinox.launcher.gtk.linux.x86_64_1.1.200.v20140603-1326
 -Xms40m
 -Xmx384m
 EOF
+
 cat > /opt/orion/eclipse/orion.conf <<EOF
 orion.file.allowedPaths=/home/$USER
 orion.auth.admin.default.password=$PASSWORD
 EOF
 
-# Setup the developer account
+# Setup the developer unix account
 if ! getent passwd $USER ; then
 	adduser --gecos "$USER,,," --disabled-password $USER
 	addgroup $USER docker
@@ -140,18 +147,13 @@ chown -R $USER:$USER/home/$USER
 cat > /etc/init.d/oriond <<EOF
 #!/bin/sh
 ### BEGIN INIT INFO
-# Provides:          oriond
+# Provides:	  oriond
 # Required-Start:    \$remote_fs \$syslog
 # Required-Stop:     \$remote_fs \$syslog
 # Default-Start:     2 3 4 5
 # Default-Stop:      0 1 6
 # Short-Description: Start development box environment
-# Description:       This file should be used to construct scripts to be
-#                    placed in /etc/init.d.  This example start a
-#                    single forking daemon capable of writing a pid
-#                    file.  To get other behavoirs, implemend
-#                    do_start(), do_stop() or other functions to
-#                    override the defaults in /lib/init/init-d-script.
+# Description:       Startup script to execute the development environment as $USER
 # Author: Ronoaldo JLP <ronoaldo@gmail.com>
 ### END INIT INFO
 
@@ -174,50 +176,96 @@ case \$1 in
 	restart) do_stop ;  do_start ;;
 esac
 EOF
+
 chmod +x /etc/init.d/oriond
 update-rc.d oriond defaults
 
+# Setup remote TTY with random URL endpoint
+export GOPATH=$(mktemp -d) GOTTY_PORT=2022
+go get -d github.com/yudai/gotty
+go build -o /usr/local/bin/gotty github.com/yudai/gotty
+
+cat > /etc/init.d/gottyd <<EOF
+#!/bin/sh
+### BEGIN INIT INFO
+# Provides:	  gottyd
+# Required-Start:    \$remote_fs \$syslog
+# Required-Stop:     \$remote_fs \$syslog
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: Start remote websocket shell
+# Description:       Startup script to execute websocket tty as $USER
+# Author: Ronoaldo JLP <ronoaldo@gmail.com>
+### END INIT INFO
+
+DESC="Websocket shell"
+DAEMON=/usr/local/bin/gotty
+
+do_start() {
+	# Start as a daemon for the $USER user
+	start-stop-daemon --start --chuid $USER --chdir /home/$USER --background --verbose \
+		-x \$DAEMON -- --credentials "admin:$PASSWORD" --permit-write --reconnect --port $GOTTY_PORT /bin/bash -l
+}
+
+do_stop() {
+	# We should have only one running anyway
+	ps fax | awk '/gotty/ {print \$1}' | xargs kill -9
+}
+
+case \$1 in
+	start)   do_start ;;
+	stop)    do_stop ;;
+	restart) do_stop ;  do_start ;;
+esac
+EOF
+
+chmod +x /etc/init.d/gottyd
+update-rc.d gottyd defaults
 
 # Expose on port 80 using Nginx reverse proxy
 cat > /etc/nginx/conf.d/orion.conf <<EOF
-map \$http_upgrade \$connection_upgrade {
+map $http_upgrade $connection_upgrade {
 	default upgrade;
 	'' close;
 }
 
-upstream websocket {
-	server 127.0.0.1:${PORT};
+upstream gotty {
+	server 127.0.0.1:$GOTTY_PORT;
 }
 
 server {
 	listen 80;
 
 	location / {
-		proxy_set_header Host \$host;
-		proxy_set_header X-Real-IP \$remote_addr;
-		proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+		proxy_set_header Host $host;
+		proxy_set_header X-Real-IP $remote_addr;
+		proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
 
-		set \$proxyport ${PORT};
-		if (\$host ~* ([2-9][0-9][0-9][0-9])\..*) {
-			set \$proxyport \$1;
+		set $proxyport $PORT;
+		if ($host ~* ([2-9][0-9][0-9][0-9])\..*) {
+			set $proxyport $1;
 		}
 
-		proxy_pass http://127.0.0.1:\$proxyport;
+		proxy_pass http://127.0.0.1:$proxyport;
 	}
 
-	location /shell/tty {
-		proxy_pass http://websocket;
+	location /shell/gotty/$GOTTY_SALT {
+		proxy_pass http://gotty/;
 		proxy_http_version 1.1;
-		proxy_set_header Upgrade \$http_upgrade;
-		proxy_set_header Connection \$connection_upgrade;
+		proxy_read_timeout 3600;
+		proxy_buffer_size 1024;
+		proxy_set_header Upgrade $http_upgrade;
+		proxy_set_header Connection $connection_upgrade;
+		proxy_set_header Origin "";
 	}
 }
 EOF
 rm -vf /etc/nginx/sites-enabled/default # Disable default site
 
 # Restart the services after a sucessfull boot
-service nginx restart
-service oriond restart
+for s in oriond gottyd nginx ; do 
+	service $s restart
+done
 
 # Show user instructions on serial console
 cat <<EOF
@@ -233,6 +281,7 @@ You can login with:
 * Username: admin
 * Password: $PASSWORD
 * URL: http://$(metadata 'network-interfaces/0/access-configs/0/external-ip')/
+* TTY: http://$(metadata 'network-interfaces/0/access-configs/0/external-ip')/tty/gotty/$GOTTY_SALT
 
 Happy hacking!
 
