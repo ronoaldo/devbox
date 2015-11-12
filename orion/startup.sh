@@ -27,8 +27,8 @@ fi
 export DEBIAN_FRONTEND=noninteractive
 
 # Setup testing, with negative pinning
-echo     'deb http://httpredir.debian.net/debian testing main' >> /etc/apt/sources.list.d/testing.list
-echo -n 'Package: *\nPin: release a=testing\nPin-Priority: -1' >> /etc/apt/preferences.d/testing
+echo     'deb http://httpredir.debian.org/debian testing main' >> /etc/apt/sources.list.d/testing.list
+echo -e 'Package: *\nPin: release a=testing\nPin-Priority: -1' >> /etc/apt/preferences.d/testing
 
 # Update package lists and upgrade installed programs
 apt-get -qq update && apt-get -qq upgrade --yes
@@ -43,13 +43,12 @@ apt-get install -qq --yes \
 	openjdk-7-jdk openjdk-8-jdk ant \
 	python-dev python3-dev \
 	ruby ruby-dev ruby-compass \
-	golang-go golang-go.tools \
 	docker.io \
 	mysql-client sqlite3 \
 	nginx
 
 # Cherry pick some packages from testing
-apt-get install -qq --yes \
+apt-get install -ttesting -qq --yes \
 	golang-go golang-golang-x-tools maven
 
 # Install some basic tools
@@ -72,6 +71,7 @@ metadata() {
 }
 
 # Detect password from metadata server, if available
+export USER="$(metadata 'attributes/orion-unixuser' 'developer')"
 export PASSWORD="$(dd if=/dev/urandom bs=12 count=1 status=none | base64)"
 export PASSWORD="$(metadata 'attributes/orion-password' "$PASSWORD")"
 # Default port to launch the IDE
@@ -113,7 +113,7 @@ plugins/org.eclipse.equinox.launcher.gtk.linux.x86_64_1.1.200.v20140603-1326
 -consoleLog
 -console
 -data
-/home/developer/orion
+/home/$USER/orion
 -nosplash
 -vmargs
 -Dorg.eclipse.equinox.http.jetty.http.port=$PORT
@@ -123,18 +123,18 @@ plugins/org.eclipse.equinox.launcher.gtk.linux.x86_64_1.1.200.v20140603-1326
 -Xmx384m
 EOF
 cat > /opt/orion/eclipse/orion.conf <<EOF
-orion.file.allowedPaths=/home/developer
+orion.file.allowedPaths=/home/$USER
 orion.auth.admin.default.password=$PASSWORD
 EOF
 
 # Setup the developer account
-if ! getent passwd developer ; then
-	adduser --gecos "Developer,,," --disabled-password developer
-	addgroup developer docker
+if ! getent passwd $USER ; then
+	adduser --gecos "$USER,,," --disabled-password $USER
+	addgroup $USER docker
 fi
 
-# Make shure all files are owned by the developer account under /home
-chown -R developer:developer /home/developer
+# Make shure all files are owned by the $USER account under /home
+chown -R $USER:$USER/home/$USER
 
 # Setup daemon script
 cat > /etc/init.d/oriond <<EOF
@@ -159,13 +159,13 @@ DESC="Development Environment"
 DAEMON=/usr/local/bin/orion
 
 do_start() {
-	# Start as a daemon for the developer user
-	start-stop-daemon --start --chuid developer --chdir /home/developer --background --verbose -x \$DAEMON
+	# Start as a daemon for the $USER user
+	start-stop-daemon --start --chuid $USER --chdir /opt/orion/eclipse/ --background --verbose -x \$DAEMON
 }
 
 do_stop() {
 	# We should have only one running anyway
-	ps fax | awk '/orion/ {print $1}' | xargs kill -9
+	ps fax | awk '/orion/ {print \$1}' | xargs kill -9
 }
 
 case \$1 in
