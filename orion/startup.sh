@@ -26,6 +26,10 @@ fi
 # Quiet installation for debian packages
 export DEBIAN_FRONTEND=noninteractive
 
+# Setup testing, with negative pinning
+echo     'deb http://httpredir.debian.net/debian testing main' >> /etc/apt/sources.list.d/testing.list
+echo -n 'Package: *\nPin: release a=testing\nPin-Priority: -1' >> /etc/apt/preferences.d/testing
+
 # Update package lists and upgrade installed programs
 apt-get -qq update && apt-get -qq upgrade --yes
 
@@ -43,6 +47,10 @@ apt-get install -qq --yes \
 	docker.io \
 	mysql-client sqlite3 \
 	nginx
+
+# Cherry pick some packages from testing
+apt-get install -qq --yes \
+	golang-go golang-golang-x-tools maven
 
 # Install some basic tools
 npm -g install grunt-cli gulp-cli bower less
@@ -87,20 +95,6 @@ case $DATA_DISK in
 	;;
 esac
 
-# TODO(ronoaldo): use Debian repository maven.
-# Maven 3.1+ made significant changes
-# and it is not included as part of the current Debian stable release, however
-# there are packages on Sid and Testing that will potentially get into
-# the backports release soon.
-if [ ! -f /usr/local/bin/mvn ] ; then
-	echo "Installing maven ..."
-	MAVEN_BIN="http://ftp.unicamp.br/pub/apache/maven/maven-3/3.3.3/binaries/apache-maven-3.3.3-bin.tar.gz"
-	mkdir -p /opt/maven
-	curl -s $MAVEN_BIN | tar xzf - -C /opt/maven
-	ln -s /opt/maven/apache-maven-3.3.3/bin/mvnDebug /usr/local/bin/mvnDebug
-	ln -s /opt/maven/apache-maven-3.3.3/bin/mvn /usr/local/bin/mvn
-fi
-
 # Setup Orion
 if [ ! -d /opt/orion ] ; then
 	echo "Installing orion ..."
@@ -109,7 +103,9 @@ if [ ! -d /opt/orion ] ; then
 	mkdir -p /opt/orion
 	curl -s "$ORION_BIN" > $ORION_TMP
 	unzip -q -n $ORION_TMP -d /opt/orion/
-	cat > /opt/orion/eclipse/orion.ini <<EOF
+	ln -s /opt/orion/eclipse/orion /usr/local/bin/orion
+fi
+cat > /opt/orion/eclipse/orion.ini <<EOF
 -startup
 plugins/org.eclipse.equinox.launcher_1.3.0.v20140415-2008.jar
 --launcher.library
@@ -126,12 +122,10 @@ plugins/org.eclipse.equinox.launcher.gtk.linux.x86_64_1.1.200.v20140603-1326
 -Xms40m
 -Xmx384m
 EOF
-	cat > /opt/orion/eclipse/orion.conf <<EOF
+cat > /opt/orion/eclipse/orion.conf <<EOF
 orion.file.allowedPaths=/home/developer
 orion.auth.admin.default.password=$PASSWORD \
 EOF
-	ln -s /opt/orion/eclipse/orion /usr/local/bin/orion
-fi
 
 # Setup the developer account
 if ! getent passwd developer ; then
