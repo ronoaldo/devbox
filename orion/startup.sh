@@ -124,7 +124,7 @@ plugins/org.eclipse.equinox.launcher.gtk.linux.x86_64_1.1.200.v20140603-1326
 EOF
 cat > /opt/orion/eclipse/orion.conf <<EOF
 orion.file.allowedPaths=/home/developer
-orion.auth.admin.default.password=$PASSWORD \
+orion.auth.admin.default.password=$PASSWORD
 EOF
 
 # Setup the developer account
@@ -217,6 +217,7 @@ rm -vf /etc/nginx/sites-enabled/default # Disable default site
 
 # Restart the services after a sucessfull boot
 service nginx restart
+service oriond restart
 
 # Show user instructions on serial console
 cat <<EOF
