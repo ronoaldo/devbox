@@ -78,8 +78,7 @@ export USER="$(metadata 'attributes/orion-unixuser' 'developer')"
 export PASSWORD="$(dd if=/dev/urandom bs=12 count=1 status=none | base64)"
 export PASSWORD="$(metadata 'attributes/orion-password' "$PASSWORD")"
 export PORT="$(metadata 'attributes/orion-port' '2000')"
-export GOTTY_SALT="$(dd if=/dev/urandom bs=22 count=1 status=none | base64 | tr -d '/')"
-export GOTTY_SALT="$(metadata 'attributes/orion-ttysalt' "GOTTY_SALT")"
+export GOTTY_PORT=2022
 
 # Setup data disk as home partition
 DATA_DISK=$(metadata 'attributes/orion-datadisk' '')
@@ -141,7 +140,7 @@ if ! getent passwd $USER ; then
 fi
 
 # Make shure all files are owned by the $USER account under /home
-chown -R $USER:$USER/home/$USER
+chown -R $USER:$USER /home/$USER
 
 # Setup daemon script
 cat > /etc/init.d/oriond <<EOF
@@ -181,9 +180,11 @@ chmod +x /etc/init.d/oriond
 update-rc.d oriond defaults
 
 # Setup remote TTY with random URL endpoint
-export GOPATH=$(mktemp -d) GOTTY_PORT=2022
-go get -d github.com/yudai/gotty
-go build -o /usr/local/bin/gotty github.com/yudai/gotty
+if [ ! -f /usr/local/bin/gotty ] ; then 
+	export GOPATH=$(mktemp -d)
+	go get -d github.com/yudai/gotty
+	go build -o /usr/local/bin/gotty github.com/yudai/gotty
+fi
 
 cat > /etc/init.d/gottyd <<EOF
 #!/bin/sh
@@ -203,8 +204,9 @@ DAEMON=/usr/local/bin/gotty
 
 do_start() {
 	# Start as a daemon for the $USER user
-	start-stop-daemon --start --chuid $USER --chdir /home/$USER --background --verbose \
-		-x \$DAEMON -- --credentials "admin:$PASSWORD" --permit-write --reconnect --port $GOTTY_PORT /bin/bash -l
+	start-stop-daemon --start --chuid $USER --chdir /home/$USER --background --verbose \\
+		-x \$DAEMON -- --address 0.0.0.0 --credential "admin:$PASSWORD" \\
+		--permit-write --reconnect --port $GOTTY_PORT /bin/bash -l
 }
 
 do_stop() {
@@ -224,7 +226,7 @@ update-rc.d gottyd defaults
 
 # Expose on port 80 using Nginx reverse proxy
 cat > /etc/nginx/conf.d/orion.conf <<EOF
-map $http_upgrade $connection_upgrade {
+map \$http_upgrade \$connection_upgrade {
 	default upgrade;
 	'' close;
 }
@@ -237,25 +239,25 @@ server {
 	listen 80;
 
 	location / {
-		proxy_set_header Host $host;
-		proxy_set_header X-Real-IP $remote_addr;
-		proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+		proxy_set_header Host \$host;
+		proxy_set_header X-Real-IP \$remote_addr;
+		proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
 
-		set $proxyport $PORT;
-		if ($host ~* ([2-9][0-9][0-9][0-9])\..*) {
-			set $proxyport $1;
+		set \$proxyport $PORT;
+		if (\$host ~* ([2-9][0-9][0-9][0-9])\..*) {
+			set \$proxyport \$1;
 		}
 
-		proxy_pass http://127.0.0.1:$proxyport;
+		proxy_pass http://127.0.0.1:\$proxyport;
 	}
 
-	location /shell/gotty/$GOTTY_SALT {
+	location /shell/gotty/ {
 		proxy_pass http://gotty/;
 		proxy_http_version 1.1;
 		proxy_read_timeout 3600;
-		proxy_buffer_size 1024;
-		proxy_set_header Upgrade $http_upgrade;
-		proxy_set_header Connection $connection_upgrade;
+		proxy_buffer_size 512;
+		proxy_set_header Upgrade \$http_upgrade;
+		proxy_set_header Connection \$connection_upgrade;
 		proxy_set_header Origin "";
 	}
 }
@@ -275,13 +277,15 @@ Your cloud IDE is ready!
 
 Orion was installed and launched on port $PORT,
 and proxied on port 80 using Nginx.
+GoTTY was installed and launched on port $GOTTY_PORT,
+also proxied on port 80 using Nginx.
 
 You can login with:
 
 * Username: admin
 * Password: $PASSWORD
 * URL: http://$(metadata 'network-interfaces/0/access-configs/0/external-ip')/
-* TTY: http://$(metadata 'network-interfaces/0/access-configs/0/external-ip')/tty/gotty/$GOTTY_SALT
+* TTY: http://$(metadata 'network-interfaces/0/access-configs/0/external-ip')/tty/gotty/
 
 Happy hacking!
 
