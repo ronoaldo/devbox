@@ -193,13 +193,13 @@ port = "$GOTTY_PORT"
 permit_write = true
 enable_basic_auth = true
 credential = "$USER:$PASSWORD"
-title_format = "Shell - ({{.Hostname}})"
+title_format = "Shell ({{.Hostname}})"
 preferences {
 	desktop_notification_bell = true
 	environment = {
 		"TERM" = "xterm-256color"
 	}
-	font_size = 12
+	font_size = 14
 	background_color = "rgb(16, 16, 16)"
 }
 EOF
@@ -301,7 +301,7 @@ You can login with:
 
 * Username: admin
 * Password: $PASSWORD
-* URL: http://$(metadata 'network-interfaces/0/access-configs/0/external-ip')/
+* IDE: http://$(metadata 'network-interfaces/0/access-configs/0/external-ip')/
 * TTY: http://$(metadata 'network-interfaces/0/access-configs/0/external-ip')/tty/gotty/
 
 Happy hacking!
