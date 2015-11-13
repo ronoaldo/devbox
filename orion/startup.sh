@@ -131,6 +131,7 @@ EOF
 cat > /opt/orion/eclipse/orion.conf <<EOF
 orion.file.allowedPaths=/home/$USER
 orion.auth.admin.default.password=$PASSWORD
+orion.auth.user.creation=admin
 EOF
 
 # Setup the developer unix account
