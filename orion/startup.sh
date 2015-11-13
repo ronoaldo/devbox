@@ -187,6 +187,23 @@ if [ ! -f /usr/local/bin/gotty ] ; then
 	go build -o /usr/local/bin/gotty github.com/yudai/gotty
 fi
 
+cat > /etc/gotty.conf <<EOF
+address = "0.0.0.0"
+port = "$GOTTY_PORT"
+permit_write = true
+enable_basic_auth = true
+credential = "$USER:$PASSWORD"
+title_format = "Shell - ({{.Hostname}})"
+preferences {
+	desktop_notification_bell = true
+	environment = {
+		"TERM" = "xterm-256color"
+	}
+	font_size = 12
+	background_color = "rgb(16, 16, 16)"
+}
+EOF
+
 cat > /etc/init.d/gottyd <<EOF
 #!/bin/sh
 ### BEGIN INIT INFO
@@ -205,14 +222,13 @@ DAEMON=/usr/local/bin/gotty
 
 do_start() {
 	# Start as a daemon for the $USER user
-	start-stop-daemon --start --chuid $USER --chdir /home/$USER --background --verbose \\
-		-x \$DAEMON -- --address 0.0.0.0 --credential "admin:$PASSWORD" \\
-		--permit-write --reconnect --port $GOTTY_PORT /bin/bash -l
+	start-stop-daemon --start --chuid $USER --chdir /home/$USER --background --verbose -x \$DAEMON -- \
+		--config /etc/gotty.conf /bin/bash -l
 }
 
 do_stop() {
 	# We should have only one running anyway
-	ps fax | awk '/gotty/ {print \$1}' | xargs kill -9
+	ps fax | awk '/bin\\/gotty/ {print \$1}' | xargs kill -9
 }
 
 case \$1 in
